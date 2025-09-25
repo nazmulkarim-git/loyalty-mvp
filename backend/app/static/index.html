@@ -1,0 +1,424 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>AnniCard</title>
+  <style>
+    :root {
+      --bg: #111827;
+      --card: #1f2937;
+      --muted: #9ca3af;
+      --text: #f3f4f6;
+      --accent: #ef4444;
+      --accent-2: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto; margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+    header { padding: 16px; font-weight: 800; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+    main { padding: 16px; max-width: 1100px; margin: auto; }
+    .card { background: var(--card); border-radius: 14px; padding:16px; margin:12px 0; box-shadow: 0 3px 14px rgba(0,0,0,.35); border:1px solid rgba(239,68,68,.2); }
+    input, select, button { padding:12px; border-radius:10px; border:1px solid #374151; background:#0b1220; color:var(--text); }
+    button { cursor:pointer; border:1px solid var(--accent); background:linear-gradient(90deg, var(--accent), var(--accent-2)); }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .hidden { display:none; }
+    .pill { padding:4px 10px; border-radius:999px; background:#3f1d1d; border:1px solid var(--accent); font-size:12px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap:12px; }
+    .muted { color:var(--muted); font-size: 12px; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .link { color:#fca5a5; cursor:pointer; text-decoration: underline; }
+    h1,h2,h3 { margin: 0 0 10px 0; }
+    .tabs { display:flex; gap:8px; margin-top:8px; }
+    .tab { padding:8px 12px; border-radius:10px; border:1px solid var(--accent); cursor:pointer; }
+    .tab.active { background: #7f1d1d; }
+    .title { display:flex; align-items:center; gap:10px; }
+    .logo { font-weight:900; font-size:24px; letter-spacing:.5px; }
+    #toast { position: sticky; top: 10px; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="title">
+    <div class="logo">AnniCard</div>
+    <div class="muted">Stamp → Redeem → Smile</div>
+  </div>
+</header>
+<main>
+  <div class="tabs">
+    <div id="tab-customer" class="tab active" onclick="switchTab('customer')">Customer</div>
+    <div id="tab-merchant" class="tab" onclick="switchTab('merchant')">Merchant</div>
+    <div id="tab-admin" class="tab" onclick="switchTab('admin')">Admin</div>
+  </div>
+
+  <div id="toast" class="card hidden"></div>
+
+  <!-- Customer Portal -->
+  <section id="customer-portal">
+    <div id="customer-auth" class="card">
+      <h2>Customer — Sign in</h2>
+      <div class="row">
+        <input id="cPhone" placeholder="+8801XXXXXXXXX" style="flex:1"/>
+        <input id="cPin" placeholder="4-digit PIN" maxlength="4"/>
+        <button onclick="cSignIn()">Sign in</button>
+      </div>
+      <h3 style="margin-top:16px;">New here? Sign up</h3>
+      <div class="row">
+        <input id="cName" placeholder="Full name" style="flex:1"/>
+        <input id="cPhoneNew" placeholder="Phone" />
+        <input id="cPinNew" placeholder="PIN" maxlength="4"/>
+        <input id="cPinConfirm" placeholder="Confirm PIN" maxlength="4"/>
+        <input id="cDob" type="date" />
+        <button onclick="cSignUp()">Sign up</button>
+      </div>
+    </div>
+
+    <div id="customer-app" class="hidden">
+      <div class="card">
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <h2>Partner Cafés</h2>
+          <div class="actions"><button onclick="cLogout()">Log out</button></div>
+        </div>
+        <div id="merchantsList" class="grid"></div>
+        <div id="merchantsEmpty" class="muted hidden">No cafés yet.</div>
+      </div>
+
+      <div class="card">
+        <h3>My Stamps</h3>
+        <div id="enrollmentsList" class="grid"></div>
+        <div id="enrollmentsEmpty" class="muted hidden">No stamps yet. Get stamped at a café.</div>
+      </div>
+
+      <div class="card">
+        <h3>Profile</h3>
+        <div class="row">
+          <input id="cpName" placeholder="Name" style="flex:1"/>
+          <input id="cpEmail" placeholder="Email"/>
+          <input id="cpPhone" placeholder="Phone"/>
+          <input id="cpPin" placeholder="New PIN (optional)" maxlength="4"/>
+          <input id="cpPin2" placeholder="Confirm PIN" maxlength="4"/>
+          <input id="cpDob" type="date"/>
+          <button onclick="cSaveProfile()">Save</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Merchant Portal -->
+  <section id="merchant-portal" class="hidden">
+    <div id="merchant-auth" class="card">
+      <h2>Merchant — Sign in</h2>
+      <div class="row">
+        <input id="mPhone" placeholder="Phone"/>
+        <input id="mPin" placeholder="4-digit PIN" maxlength="4"/>
+        <button onclick="mSignIn()">Sign in</button>
+      </div>
+      <h3 style="margin-top:16px;">New merchant? Sign up</h3>
+      <div class="row">
+        <input id="mbName" placeholder="Business name" style="flex:1"/>
+        <select id="mbType">
+          <option>Cafe</option><option>Salon</option><option>Restaurant</option>
+        </select>
+        <input id="mOwner" placeholder="Owner name"/>
+        <input id="mPhoneNew" placeholder="Phone"/>
+        <input id="mPinNew" placeholder="PIN" maxlength="4"/>
+        <input id="mPinConfirm" placeholder="Confirm PIN" maxlength="4"/>
+        <input id="mLoc" placeholder="Location"/>
+        <input id="mCode" placeholder="Signup code"/>
+        <button onclick="mSignUp()">Sign up</button>
+      </div>
+    </div>
+
+    <div id="merchant-app" class="hidden">
+      <div class="card">
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <h2>Merchant Console</h2>
+          <div class="actions"><button onclick="mLogout()">Log out</button></div>
+        </div>
+        <div id="merchantProfile"></div>
+      </div>
+
+      <div class="card">
+        <h3>Add Stamp</h3>
+        <div class="row">
+          <input id="sPhone" placeholder="Customer phone"/>
+          <button onclick="lookup()">Lookup</button>
+          <div id="lookupResult" class="muted"></div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button onclick="addStamp()">Add Stamp</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Pending Redemptions</h3>
+        <div id="pendingList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Admin Portal -->
+  <section id="admin-portal" class="hidden">
+    <div id="admin-auth" class="card">
+      <h2>Admin — Sign in</h2>
+      <div class="row">
+        <input id="aPhone" placeholder="Phone"/>
+        <input id="aPin" placeholder="4-digit PIN" maxlength="4"/>
+        <button onclick="aSignIn()">Sign in</button>
+      </div>
+    </div>
+
+    <div id="admin-app" class="hidden">
+      <div class="card">
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <h2>Admin Console</h2>
+          <div class="actions"><button onclick="aLogout()">Log out</button></div>
+        </div>
+        <p class="muted">Full control over users and merchants.</p>
+      </div>
+      <div class="card">
+        <h3>All Merchants</h3>
+        <div id="adminMerchants"></div>
+      </div>
+      <div class="card">
+        <h3>All Users</h3>
+        <div id="adminUsers"></div>
+      </div>
+      <div class="card">
+        <h3>All Pending Redemptions</h3>
+        <div id="adminPending"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),2500); }
+
+let currentTab = 'customer';
+function switchTab(tab){
+  currentTab = tab;
+  ['customer','merchant','admin'].forEach(k => {
+    document.getElementById(k+'-portal').classList.toggle('hidden', k!==tab);
+    document.getElementById('tab-'+k).classList.toggle('active', k===tab);
+  });
+}
+
+async function api(path, opts={}){
+  const headers = opts.headers || {};
+  headers['Content-Type'] = 'application/json';
+  const res = await fetch(path, { ...opts, headers, credentials: 'include' });
+  if(!res.ok){
+    let t; try { t = await res.json(); } catch { t = await res.text(); }
+    throw new Error(typeof t === 'string' ? t : (t.detail || JSON.stringify(t)));
+  }
+  return res.json();
+}
+
+function show(id, on=true){ document.getElementById(id).classList.toggle('hidden', !on); }
+
+// ---------- CUSTOMER ----------
+async function cSignIn(){
+  const phone = document.getElementById('cPhone').value.trim();
+  const pin = document.getElementById('cPin').value.trim();
+  await api('/auth/customer/signin', {method:'POST', body: JSON.stringify({phone, pin})});
+  toast('Signed in'); show('customer-auth', false); show('customer-app', true); await cLoadAll();
+}
+async function cSignUp(){
+  const name = document.getElementById('cName').value.trim();
+  const phone = document.getElementById('cPhoneNew').value.trim();
+  const pin = document.getElementById('cPinNew').value.trim();
+  const confirm_pin = document.getElementById('cPinConfirm').value.trim();
+  const dob = document.getElementById('cDob').value;
+  await api('/auth/customer/signup', {method:'POST', body: JSON.stringify({name, phone, pin, confirm_pin, dob})});
+  toast('Account created'); show('customer-auth', false); show('customer-app', true); await cLoadAll();
+}
+async function cLogout(){ await api('/auth/logout', {method:'POST'}); show('customer-app', false); show('customer-auth', true); }
+
+async function cLoadAll(){
+  const u = await api('/auth/session');
+  document.getElementById('cpName').value = u.name || '';
+  document.getElementById('cpEmail').value = u.email || '';
+  document.getElementById('cpPhone').value = u.phone_e164 || '';
+  document.getElementById('cpDob').value = u.dob ? u.dob : '';
+
+  const list = document.getElementById('merchantsList');
+  const empty = document.getElementById('merchantsEmpty');
+  const items = await api('/merchants');
+  list.innerHTML = items.map(m => `
+    <div class="card">
+      <div style="font-weight:800">${m.business_name} <span class="pill">${m.business_type}</span></div>
+      <div class="muted">${m.location_text || ''}</div>
+      <div class="pill">${m.stamps_required} stamps → free</div>
+      <div class="actions" style="margin-top:8px;">
+        <button onclick='requestRedeem("${m.id}")'>Redeem</button>
+      </div>
+    </div>
+  `).join('');
+  empty.classList.toggle('hidden', items.length !== 0);
+
+  const ens = await api('/enrollments/my');
+  const el = document.getElementById('enrollmentsList');
+  const ee = document.getElementById('enrollmentsEmpty');
+  el.innerHTML = ens.map(e => `
+    <div class="card">
+      <div style="font-weight:800">${e.merchant.business_name}</div>
+      <div>Progress: ${e.stamps_count} / ${e.stamps_required}</div>
+      <div class="muted">Total stamped: ${e.total_stamps}</div>
+      <div class="actions" style="margin-top:8px;">
+        <button ${e.stamps_count >= e.stamps_required ? '' : 'disabled'} onclick='requestRedeem("${e.merchant.id}")'>Redeem</button>
+      </div>
+    </div>
+  `).join('');
+  ee.classList.toggle('hidden', ens.length !== 0);
+}
+
+async function cSaveProfile(){
+  const name = document.getElementById('cpName').value.trim();
+  const email = document.getElementById('cpEmail').value.trim();
+  const phone = document.getElementById('cpPhone').value.trim();
+  const pin = document.getElementById('cpPin').value.trim();
+  const confirm_pin = document.getElementById('cpPin2').value.trim();
+  const dob = document.getElementById('cpDob').value;
+  const u = await api('/auth/customer/profile', {method:'PATCH', body: JSON.stringify({name, email, phone, dob, pin: pin || null, confirm_pin: confirm_pin || null})});
+  toast('Profile saved');
+}
+
+async function requestRedeem(merchant_id){
+  try{
+    const res = await api('/redeem/request', {method:'POST', body: JSON.stringify({merchant_id})});
+    toast('Redeem requested');
+  }catch(e){
+    toast('Redeem failed: ' + e.message);
+  }
+}
+
+// ---------- MERCHANT ----------
+async function mSignIn(){
+  const phone = document.getElementById('mPhone').value.trim();
+  const pin = document.getElementById('mPin').value.trim();
+  await api('/auth/merchant/signin', {method:'POST', body: JSON.stringify({phone, pin})});
+  toast('Signed in'); show('merchant-auth', false); show('merchant-app', true); await mLoadAll();
+}
+async function mSignUp(){
+  const business_name = document.getElementById('mbName').value.trim();
+  const business_type = document.getElementById('mbType').value;
+  const owner_name = document.getElementById('mOwner').value.trim();
+  const phone = document.getElementById('mPhoneNew').value.trim();
+  const pin = document.getElementById('mPinNew').value.trim();
+  const confirm_pin = document.getElementById('mPinConfirm').value.trim();
+  const location_text = document.getElementById('mLoc').value.trim();
+  const signup_code = document.getElementById('mCode').value.trim();
+  await api('/auth/merchant/signup', {method:'POST', body: JSON.stringify({business_name, business_type, owner_name, phone, pin, confirm_pin, location_text, signup_code})});
+  toast('Merchant created'); show('merchant-auth', false); show('merchant-app', true); await mLoadAll();
+}
+async function mLogout(){ await api('/auth/logout', {method:'POST'}); show('merchant-app', false); show('merchant-auth', true); }
+
+async function mLoadAll(){
+  const m = await api('/merchants/mine');
+  document.getElementById('merchantProfile').innerHTML = m ? `
+    <div><b>${m.business_name}</b> <span class="pill">${m.business_type}</span></div>
+    <div class="muted">${m.location_text || ''}</div>
+    <div>Required stamps: <b>${m.stamps_required}</b></div>
+    <div>Status: ${m.is_active ? 'Active' : 'Inactive'}</div>
+  ` : '<div class="muted">No merchant profile found.</div>';
+
+  await loadPending();
+}
+
+async function lookup(){
+  const phone = document.getElementById('sPhone').value.trim();
+  const r = await api('/stamps/lookup?phone=' + encodeURIComponent(phone));
+  if(!r.exists){ document.getElementById('lookupResult').textContent = 'Customer not found'; return; }
+  document.getElementById('lookupResult').textContent = r.name + ' — ' + r.stamps_count + '/' + r.stamps_required;
+}
+
+async function addStamp(){
+  const customer_phone = document.getElementById('sPhone').value.trim();
+  const r = await api('/stamps/add', {method:'POST', body: JSON.stringify({customer_phone})});
+  toast('Stamped! ' + r.stamps_count + '/' + r.stamps_required + (r.eligible_for_redeem ? ' — Eligible!' : ''));
+  await loadPending();
+}
+
+async function loadPending(){
+  const list = document.getElementById('pendingList');
+  const items = await api('/redeem/pending');
+  list.innerHTML = items.length ? items.map(x => `
+    <div class="card">
+      <div><b>${x.merchant_name}</b> — requested at ${new Date(x.requested_at).toLocaleString()}</div>
+      <div class="actions" style="margin-top:8px;"><button onclick='approve("${x.id}")'>Approve</button></div>
+    </div>
+  `).join('') : '<div class="muted">No pending redemptions</div>';
+}
+async function approve(id){ await api('/redeem/approve', {method:'POST', body: JSON.stringify({redemption_id: id})}); toast('Approved'); await loadPending(); }
+
+// ---------- ADMIN ----------
+async function aSignIn(){
+  const phone = document.getElementById('aPhone').value.trim();
+  const pin = document.getElementById('aPin').value.trim();
+  await api('/auth/admin/signin', {method:'POST', body: JSON.stringify({phone, pin})});
+  toast('Signed in'); show('admin-auth', false); show('admin-app', true); await aLoadAll();
+}
+async function aLogout(){ await api('/auth/logout', {method:'POST'}); show('admin-app', false); show('admin-auth', true); }
+
+async function aLoadAll(){
+  const ms = await api('/admin/merchants');
+  const us = await api('/admin/users');
+  const ps = await api('/admin/pending');
+  document.getElementById('adminMerchants').innerHTML = ms.map(m => `
+    <div class="card">
+      <div><b>${m.business_name}</b> <span class="pill">${m.business_type}</span></div>
+      <div class="muted">${m.location_text || ''}</div>
+      <div>Required stamps: <b>${m.stamps_required}</b></div>
+      <div>Status: ${m.is_active ? 'Active' : 'Inactive'}</div>
+      <div class="actions" style="margin-top:8px;">
+        <button onclick="adminEditMerchant('${m.id}')">Edit</button>
+      </div>
+    </div>`).join('');
+  document.getElementById('adminUsers').innerHTML = us.map(u => `
+    <div class="card">
+      <div><b>${u.name}</b> <span class="muted">${u.phone_e164}</span></div>
+      <div>Role: <b>${u.role}</b></div>
+      <div class="actions" style="margin-top:8px;">
+        <button onclick="adminEditUser('${u.id}','${u.name}','${u.phone_e164}','${u.role}')">Edit</button>
+      </div>
+    </div>`).join('');
+  document.getElementById('adminPending').innerHTML = ps.length ? ps.map(x => `
+    <div class="card">
+      <div><b>${x.merchant_name}</b> — requested at ${new Date(x.requested_at).toLocaleString()}</div>
+      <div class="actions" style="margin-top:8px;"><button onclick='approve("${x.id}")'>Approve</button></div>
+    </div>`).join('') : '<div class="muted">No pending redemptions</div>';
+}
+
+async function adminEditMerchant(id){
+  const name = prompt('Business name (leave empty to keep)');
+  const type = prompt('Business type (Cafe/Salon/Restaurant/...)');
+  const loc = prompt('Location');
+  const stamps_required = prompt('Stamps required (number)');
+  const active = confirm('Set ACTIVE? (OK=yes, Cancel=no)');
+  const params = new URLSearchParams();
+  if(name) params.append('business_name', name);
+  if(type) params.append('business_type', type);
+  if(loc) params.append('location_text', loc);
+  if(stamps_required) params.append('stamps_required', Number(stamps_required));
+  params.append('is_active', active ? 'true' : 'false');
+  await api('/admin/merchants/'+id + '?' + params.toString(), {method:'PATCH'});
+  toast('Merchant updated'); await aLoadAll();
+}
+
+async function adminEditUser(id, curName, curPhone, curRole){
+  const name = prompt('Name', curName);
+  const phone = prompt('Phone', curPhone);
+  const role = prompt('Role (customer/merchant/admin)', curRole);
+  const pin = prompt('New PIN (optional - leave empty to keep)');
+  const params = new URLSearchParams();
+  if(name) params.append('name', name);
+  if(phone) params.append('phone', phone);
+  if(role) params.append('role', role);
+  if(pin) params.append('pin', pin);
+  await api('/admin/users/'+id + '?' + params.toString(), {method:'PATCH'});
+  toast('User updated'); await aLoadAll();
+}
+</script>
+</body>
+</html>

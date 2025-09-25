@@ -1,0 +1,275 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Loyalty Card MVP</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto; margin: 0; padding: 0; background: #0f172a; color: #e5e7eb; }
+    header { padding: 16px; font-weight: 700; background:#111827; position: sticky; top:0; }
+    main { padding: 16px; max-width: 960px; margin: auto; }
+    .card { background:#1f2937; border-radius: 12px; padding:16px; margin:12px 0; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+    input, select, button { padding:10px; border-radius:8px; border:1px solid #374151; background:#111827; color:#e5e7eb; }
+    button { cursor:pointer; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .hidden { display:none; }
+    .pill { padding:4px 10px; border-radius:999px; background:#374151; font-size:12px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap:12px; }
+    .muted { color:#9ca3af; font-size: 12px; }
+    .success { color: #10b981; }
+    .danger { color: #ef4444; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .link { color:#60a5fa; cursor:pointer; text-decoration: underline; }
+  </style>
+</head>
+<body>
+<header>Loyalty Card MVP</header>
+<main>
+  <div id="authCard" class="card">
+    <h2>Login / Sign up</h2>
+    <div class="row">
+      <input id="phone" placeholder="+8801XXXXXXXXX" style="flex:1"/>
+      <input id="name" placeholder="Your name (optional)"/>
+      <button onclick="requestOTP()">Request OTP</button>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <input id="otp" placeholder="Enter OTP"/>
+      <button onclick="verifyOTP()">Verify & Sign In</button>
+    </div>
+    <p class="muted">Dev mode returns the OTP in the response and prints it in API logs.</p>
+  </div>
+
+  <div id="whoami" class="card hidden">
+    <div>Logged in as <span id="userName"></span> (<span id="userRole"></span>)</div>
+    <div class="actions" style="margin-top:8px;">
+      <span class="link" onclick="logout()">Logout</span>
+    </div>
+  </div>
+
+  <div id="customerArea" class="hidden">
+    <div class="card">
+      <h3>Partner Cafés</h3>
+      <div id="merchantsList" class="grid"></div>
+      <div id="merchantsEmpty" class="muted hidden">No cafés yet. Ask your barista to register, or create one below.</div>
+    </div>
+    <div class="card">
+      <h3>My Stamps</h3>
+      <div id="enrollmentsList" class="grid"></div>
+      <div id="enrollmentsEmpty" class="muted hidden">No stamps yet. Get stamped at a café.</div>
+    </div>
+
+    <!-- Expose Register Café to any logged-in user -->
+    <div class="card">
+      <h3>Register your Café</h3>
+      <div class="row">
+        <input id="cafeName" placeholder="Café name" style="flex:1"/>
+        <input id="cafeLocation" placeholder="Location"/>
+        <input id="stampsRequired" type="number" value="9" min="1" style="width:100px"/>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <input id="signupCode" placeholder="Signup code"/>
+        <button onclick="registerMerchant()">Create Café</button>
+      </div>
+      <p class="muted">Use the code from .env (MERCHANT_SIGNUP_CODE). Admin can skip the code.</p>
+    </div>
+  </div>
+
+  <div id="merchantArea" class="hidden">
+    <div class="card">
+      <h3>Merchant Console</h3>
+      <div class="row">
+        <input id="stampPhone" placeholder="Customer phone"/>
+        <select id="stampMerchant"></select>
+        <button onclick="addStamp()">Add Stamp</button>
+      </div>
+      <div id="stampResult" class="muted" style="margin-top:8px;"></div>
+    </div>
+    <div class="card">
+      <h3>Pending Redemptions</h3>
+      <div id="pendingList"></div>
+    </div>
+    <div class="card">
+      <h3>Reports</h3>
+      <div class="row">
+        <select id="range">
+          <option value="day">Day</option>
+          <option value="week">Week</option>
+          <option value="month">Month</option>
+        </select>
+        <button onclick="loadReport()">Load</button>
+      </div>
+      <div id="reportOut" class="muted" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <div id="adminArea" class="hidden">
+    <div class="card">
+      <h3>Admin: Quick Links</h3>
+      <p>Use API docs at <a href="/docs" class="link">/docs</a> for full control.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+const state = {
+  token: localStorage.getItem('token') || null,
+  role: localStorage.getItem('role') || null,
+};
+
+async function api(path, opts={}){
+  const headers = opts.headers || {};
+  if(state.token){
+    headers['Authorization'] = 'Bearer ' + state.token;
+  }
+  headers['Content-Type'] = 'application/json';
+  const res = await fetch(path, { ...opts, headers });
+  if(!res.ok){
+    let t; try { t = await res.json(); } catch { t = await res.text(); }
+    throw new Error(typeof t === 'string' ? t : (t.detail || JSON.stringify(t)));
+  }
+  return res.json();
+}
+
+function show(id, on=true){
+  document.getElementById(id).classList.toggle('hidden', !on);
+}
+
+function syncUI(){
+  show('authCard', !state.token);
+  show('whoami', !!state.token);
+  if(state.token){
+    document.getElementById('userRole').textContent = state.role;
+    api('/users/me').then(u => {
+      document.getElementById('userName').textContent = u.name + ' ' + u.phone_e164;
+    }).catch(()=>{});
+  }
+  const isLogged = !!state.token;
+  show('customerArea', isLogged);
+  show('merchantArea', isLogged && (state.role === 'merchant' || state.role === 'admin'));
+  show('adminArea', isLogged && state.role === 'admin');
+  if(isLogged){
+    loadMerchants();
+    loadEnrollments();
+    if(state.role === 'merchant' || state.role === 'admin'){
+      loadMerchantsForSelect();
+      loadPending();
+    }
+  }
+}
+syncUI();
+
+async function requestOTP(){
+  const phone = document.getElementById('phone').value.trim();
+  const name = document.getElementById('name').value.trim();
+  const res = await api('/auth/request-otp', {method:'POST', body: JSON.stringify({phone, name})});
+  alert('OTP requested. ' + (res.dev_otp ? 'DEV OTP: ' + res.dev_otp : 'Check SMS'));
+}
+
+async function verifyOTP(){
+  const phone = document.getElementById('phone').value.trim();
+  const code = document.getElementById('otp').value.trim();
+  const res = await api('/auth/verify-otp', {method:'POST', body: JSON.stringify({phone, code})});
+  state.token = res.access_token; state.role = res.role;
+  localStorage.setItem('token', state.token); localStorage.setItem('role', state.role);
+  syncUI();
+}
+
+function logout(){
+  localStorage.removeItem('token'); localStorage.removeItem('role');
+  state.token = null; state.role = null;
+  syncUI();
+}
+
+async function loadMerchants(){
+  const list = document.getElementById('merchantsList');
+  const empty = document.getElementById('merchantsEmpty');
+  const items = await api('/merchants');
+  list.innerHTML = items.map(m => `
+    <div class="card">
+      <div style="font-weight:700">${m.cafe_name}</div>
+      <div class="muted">${m.location_text || ''}</div>
+      <div class="pill">${m.stamps_required} stamps to free item</div>
+      <div class="actions" style="margin-top:8px;">
+        <button onclick='requestRedeem("${m.id}")'>Redeem</button>
+      </div>
+    </div>
+  `).join('');
+  empty.classList.toggle('hidden', items.length !== 0);
+}
+
+async function loadEnrollments(){
+  const list = document.getElementById('enrollmentsList');
+  const empty = document.getElementById('enrollmentsEmpty');
+  const ens = await api('/enrollments/my');
+  list.innerHTML = ens.map(e => `
+    <div class="card">
+      <div style="font-weight:700">${e.merchant.cafe_name}</div>
+      <div>Progress: ${e.stamps_count} / ${e.stamps_required}</div>
+      <div class="muted">Total stamped: ${e.total_stamps}</div>
+      <div class="actions" style="margin-top:8px;">
+        <button ${e.stamps_count >= e.stamps_required ? '' : 'disabled'} onclick='requestRedeem("${e.merchant.id}")'>Redeem</button>
+      </div>
+    </div>
+  `).join('');
+  empty.classList.toggle('hidden', ens.length !== 0);
+}
+
+async function requestRedeem(merchant_id){
+  try{
+    const res = await api('/redeem/request', {method:'POST', body: JSON.stringify({merchant_id})});
+    alert('Redeem requested. Ask barista to approve. Ref: ' + res.redemption_id);
+  }catch(e){
+    alert('Redeem failed: ' + e.message);
+  }
+}
+
+async function registerMerchant(){
+  const cafe_name = document.getElementById('cafeName').value.trim();
+  const location_text = document.getElementById('cafeLocation').value.trim();
+  const stamps_required = Number(document.getElementById('stampsRequired').value);
+  const signup_code = document.getElementById('signupCode').value.trim();
+  try{
+    const m = await api('/merchants/register', {method:'POST', body: JSON.stringify({cafe_name, location_text, stamps_required, signup_code})});
+    alert('Café created: ' + m.cafe_name + '. You now have merchant access.');
+    state.role = 'merchant'; localStorage.setItem('role','merchant');
+    loadMerchantsForSelect();
+    syncUI();
+  }catch(e){
+    alert('Failed to create café: ' + e.message);
+  }
+}
+
+async function loadMerchantsForSelect(){
+  const select = document.getElementById('stampMerchant');
+  if(!select) return;
+  const items = await api('/merchants');
+  select.innerHTML = items.map(i => `<option value="${i.id}">${i.cafe_name}</option>`).join('');
+}
+
+async function addStamp(){
+  const customer_phone = document.getElementById('stampPhone').value.trim();
+  const merchant_id = document.getElementById('stampMerchant').value;
+  const r = await api('/stamps/add', {method:'POST', body: JSON.stringify({customer_phone, merchant_id})});
+  document.getElementById('stampResult').innerHTML = r.ok ? `<span class="success">Stamped! ${r.stamps_count}/${r.stamps_required} (eligible: ${r.eligible_for_redeem})</span>` : '<span class="danger">Failed</span>';
+  loadEnrollments();
+}
+
+async function loadPending(){
+  const list = document.getElementById('pendingList');
+  const items = await api('/redeem/pending');
+  list.innerHTML = items.length ? items.map(x => `
+    <div class="card">
+      <div><b>${x.merchant_name}</b> — requested at ${new Date(x.requested_at).toLocaleString()}</div>
+      <div class="actions" style="margin-top:8px;"><button onclick='approve("${x.id}")'>Approve</button></div>
+    </div>
+  `).join('') : '<div class="muted">No pending redemptions</div>';
+}
+
+async function approve(id){
+  await api('/redeem/approve', {method:'POST', body: JSON.stringify({redemption_id: id})});
+  alert('Approved. Enjoy!');
+  loadPending();
+}
+</script>
+</body>
+</html>
